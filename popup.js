@@ -13,6 +13,12 @@ let settings = {
   ]
 };
 
+// 休憩情報
+let breakInfo = {
+  active: false,
+  endTime: null
+};
+
 // 選択されたインポートファイル
 let selectedImportFile = null;
 
@@ -24,9 +30,13 @@ document.addEventListener('DOMContentLoaded', function () {
 // ポップアップの初期化
 function initializePopup() {
   // 設定を読み込み
-  chrome.storage.local.get(['settings'], function (result) {
+  chrome.storage.local.get(['settings', 'breakInfo'], function (result) {
     if (result.settings) {
       settings = result.settings;
+    }
+    
+    if (result.breakInfo) {
+      breakInfo = result.breakInfo;
     }
 
     // UI更新
@@ -34,7 +44,51 @@ function initializePopup() {
 
     // イベントリスナーのセットアップ
     setupEventListeners();
+    
+    // 休憩モードのUIを更新
+    updateBreakModeUI();
   });
+}
+
+// 休憩モードのUIを更新
+function updateBreakModeUI() {
+  const breakModeSection = document.getElementById('break-mode-section');
+  const takeBreakBtn = document.getElementById('take-break-btn');
+  const breakTimer = document.getElementById('break-timer');
+  
+  if (!breakModeSection || !takeBreakBtn || !breakTimer) {
+    return;
+  }
+  
+  if (breakInfo.active && breakInfo.endTime) {
+    // 休憩モードがアクティブな場合
+    const endTime = new Date(breakInfo.endTime);
+    const now = new Date();
+    const remainingMs = endTime - now;
+    
+    if (remainingMs <= 0) {
+      // 休憩時間が終了している場合
+      breakTimer.textContent = '';
+      takeBreakBtn.textContent = '30分間の休憩を取る';
+      takeBreakBtn.disabled = false;
+    } else {
+      // 休憩中の場合
+      const remainingMinutes = Math.floor(remainingMs / (60 * 1000));
+      const remainingSeconds = Math.floor((remainingMs % (60 * 1000)) / 1000);
+      
+      breakTimer.textContent = `残り時間: ${remainingMinutes}分 ${remainingSeconds}秒`;
+      takeBreakBtn.textContent = '休憩を終了する';
+      takeBreakBtn.disabled = false;
+      
+      // タイマーを1秒ごとに更新
+      setTimeout(updateBreakModeUI, 1000);
+    }
+  } else {
+    // 休憩モードが無効な場合
+    breakTimer.textContent = '';
+    takeBreakBtn.textContent = '30分間の休憩を取る';
+    takeBreakBtn.disabled = false;
+  }
 }
 
 // UIを更新
@@ -179,6 +233,31 @@ function setupEventListeners() {
       URL.revokeObjectURL(url);
 
       showMessage("設定をエクスポートしました", "success");
+    });
+  }
+
+  const takeBreakBtn = document.getElementById('take-break-btn');
+  if (takeBreakBtn) {
+    takeBreakBtn.addEventListener('click', function() {
+      if (breakInfo.active) {
+        // 休憩中なら終了する
+        chrome.runtime.sendMessage({ action: 'endBreak' }, function(response) {
+          if (response && response.success) {
+            breakInfo = { active: false, endTime: null };
+            updateBreakModeUI();
+            showMessage("休憩を終了しました", "success");
+          }
+        });
+      } else {
+        // 休憩を開始する
+        chrome.runtime.sendMessage({ action: 'startBreak', duration: 30 }, function(response) {
+          if (response && response.success) {
+            breakInfo = response.breakInfo;
+            updateBreakModeUI();
+            showMessage("30分間の休憩を開始しました", "success");
+          }
+        });
+      }
     });
   }
 }
