@@ -1,44 +1,27 @@
 <!DOCTYPE html>
 <html>
 <head>
-  <title>時間制限ウェブサイトブロッカー</title>
+  <title>ウェブサイトブロッカー設定</title>
   <meta charset="UTF-8">
   <style>
     body {
-      width: 400px;
-      padding: 15px;
       font-family: sans-serif;
-    }
-    .set-container {
-      margin-bottom: 20px;
+      width: 400px;
+      margin: 0;
       padding: 15px;
-      border: 1px solid #ccc;
-      border-radius: 8px;
-      background-color: #f9f9f9;
     }
-    .set-header {
+    h1 {
+      font-size: 18px;
+      margin-top: 0;
+    }
+    .main-switch {
       display: flex;
       justify-content: space-between;
       align-items: center;
-      margin-bottom: 10px;
-    }
-    .set-name {
-      font-weight: bold;
-      font-size: 16px;
-      margin-right: 10px;
-    }
-    .set-name-input {
-      font-weight: bold;
-      width: 150px;
-      padding: 5px;
-    }
-    .list-type {
-      display: flex;
-      align-items: center;
-      margin-bottom: 10px;
-    }
-    .list-type label {
-      margin-right: 15px;
+      padding: 10px;
+      background-color: #f5f5f5;
+      border-radius: 5px;
+      margin-bottom: 15px;
     }
     .switch {
       position: relative;
@@ -79,102 +62,259 @@
     input:checked + .slider:before {
       transform: translateX(26px);
     }
-    .sites-container {
-      margin-bottom: 15px;
-    }
-    .site {
-      display: flex;
-      margin-bottom: 5px;
-      align-items: center;
-    }
-    .site input {
-      flex-grow: 1;
-      margin-right: 5px;
-      padding: 5px;
-    }
-    .time-ranges-container {
-      margin-bottom: 15px;
-    }
-    .time-range {
-      display: flex;
-      align-items: center;
-      margin-bottom: 8px;
-      padding: 8px;
-      background-color: #f0f0f0;
+    .set-container {
+      border: 1px solid #ddd;
       border-radius: 5px;
+      padding: 10px;
+      margin-bottom: 15px;
     }
-    .time-range input[type="time"] {
-      padding: 3px;
-      margin-right: 10px;
-    }
-    .controls {
+    .set-header {
       display: flex;
       justify-content: space-between;
-      margin-top: 15px;
+      align-items: center;
+      margin-bottom: 10px;
     }
-    button {
-      padding: 5px 10px;
-      cursor: pointer;
-      background-color: #f0f0f0;
-      border: 1px solid #ccc;
+    .set-name-input {
+      padding: 5px;
+      border: 1px solid #ddd;
       border-radius: 3px;
+      width: 200px;
     }
-    button:hover {
-      background-color: #e0e0e0;
+    .list-type {
+      display: flex;
+      align-items: center;
+      margin-bottom: 10px;
     }
-    .add-site {
-      margin-top: 5px;
+    .list-type label {
+      margin-right: 10px;
     }
-    h2 {
-      margin-top: 0;
-      color: #333;
-    }
-    h4 {
-      margin: 10px 0;
-      color: #555;
+    .list-type-text {
+      margin-left: 10px;
     }
     .section-header {
       display: flex;
       justify-content: space-between;
       align-items: center;
+      margin: 10px 0;
     }
-    #enabled {
-      margin-bottom: 15px;
+    .section-header h4 {
+      margin: 0;
     }
-    .remove-btn {
-      background-color: #ff9999;
-      color: #770000;
+    .sites-list, .time-ranges-list {
+      margin-bottom: 10px;
     }
-    .remove-btn:hover {
-      background-color: #ff7777;
+    .site, .time-range {
+      display: flex;
+      margin-bottom: 5px;
+      align-items: center;
+    }
+    .site-input {
+      flex-grow: 1;
+      padding: 5px;
+      border: 1px solid #ddd;
+      border-radius: 3px;
+      margin-right: 5px;
+    }
+    .time-range label {
+      display: flex;
+      align-items: center;
+      margin-right: 10px;
+    }
+    .time-range input {
+      padding: 5px;
+      border: 1px solid #ddd;
+      border-radius: 3px;
+      margin-left: 5px;
+    }
+    .add-btn, .remove-btn {
+      padding: 3px 8px;
+      background-color: #f0f0f0;
+      border: 1px solid #ddd;
+      border-radius: 3px;
+      cursor: pointer;
     }
     .add-btn {
-      /* background-color: #ccffcc;
-      color: #006600; */
+      background-color: #e3f2fd;
     }
-    .add-btn:hover {
-      /* background-color: #aaffaa; */
+    .remove-btn {
+      background-color: #ffebee;
+    }
+    .buttons {
+      text-align: center;
+      margin-top: 15px;
+      display: flex;
+      justify-content: center;
+      gap: 10px;
+    }
+    .btn {
+      padding: 8px 16px;
+      background-color: #2196F3;
+      color: white;
+      border: none;
+      border-radius: 4px;
+      cursor: pointer;
+    }
+    .btn:hover {
+      background-color: #0b7dda;
+    }
+    .btn-secondary {
+      background-color: #f44336;
+    }
+    .btn-secondary:hover {
+      background-color: #d32f2f;
+    }
+    
+    /* チャレンジ用スタイル */
+    .challenge-container {
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background-color: rgba(0, 0, 0, 0.8);
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      align-items: center;
+      z-index: 1000;
+      color: white;
+      padding: 20px;
+      text-align: center;
+    }
+    .challenge-input {
+      padding: 10px;
+      border: none;
+      border-radius: 5px;
+      width: 80%;
+      margin: 15px 0;
+      font-size: 16px;
+    }
+    .button-group {
+      display: flex;
+      gap: 10px;
+    }
+    .feedback {
+      margin-top: 10px;
+      font-weight: bold;
+    }
+    .progress-container {
+      width: 80%;
+      height: 20px;
+      background-color: #444;
+      border-radius: 10px;
+      margin: 15px 0;
+      overflow: hidden;
+    }
+    .progress-bar {
+      height: 100%;
+      background-color: #4CAF50;
+      width: 0%;
+      transition: width 0.5s;
+    }
+    .message {
+      position: fixed;
+      bottom: 20px;
+      left: 50%;
+      transform: translateX(-50%);
+      padding: 10px 20px;
+      border-radius: 5px;
+      color: white;
+      font-weight: bold;
+      z-index: 1000;
+    }
+    .message.success {
+      background-color: #4CAF50;
+    }
+    .message.error {
+      background-color: #f44336;
+    }
+    
+    /* インポート・エクスポート機能のスタイル */
+    .import-export {
+      margin-top: 20px;
+      padding: 15px;
+      background-color: #f5f5f5;
+      border-radius: 5px;
+    }
+    .import-export h3 {
+      margin-top: 0;
+      font-size: 16px;
+    }
+    .import-container {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      margin-bottom: 10px;
+    }
+    .file-input-wrapper {
+      position: relative;
+      overflow: hidden;
+      display: inline-block;
+    }
+    .file-input-wrapper input[type=file] {
+      position: absolute;
+      left: 0;
+      top: 0;
+      opacity: 0;
+      width: 100%;
+      height: 100%;
+      cursor: pointer;
+    }
+    .file-input-wrapper .btn {
+      display: inline-block;
+    }
+    .filename-display {
+      margin-left: 10px;
+      font-size: 14px;
+      color: #555;
+    }
+    .btn-import, .btn-export {
+      background-color: #4CAF50;
+    }
+    .btn-import:hover, .btn-export:hover {
+      background-color: #388E3C;
     }
   </style>
 </head>
 <body>
-  <h2>時間制限ウェブサイトブロッカー</h2>
+  <h1>時間制限ウェブサイトブロッカー</h1>
   
-  <div id="enabled">
-    <label>
-      <input type="checkbox" id="enable-blocker"> ウェブサイトブロックを有効化
+  <div class="main-switch">
+    <span>ブロッカーを有効にする</span>
+    <label class="switch">
+      <input type="checkbox" id="enable-blocker" checked>
+      <span class="slider"></span>
     </label>
   </div>
   
   <div id="sets-container">
-    <!-- セットが動的に追加されます -->
+    <!-- Set containers will be added here dynamically -->
   </div>
   
-  <div class="controls">
-    <button id="add-set" class="add-btn">新しいセットを追加</button>
-    <button id="save">設定を保存</button>
+  <button id="add-set" class="add-btn">新しいセットを追加</button>
+  
+  <div class="buttons">
+    <button id="save" class="btn">設定を保存</button>
   </div>
   
+  <!-- インポート・エクスポート機能 -->
+  <div class="import-export">
+    <h3>設定のインポート・エクスポート</h3>
+    
+    <div class="import-container">
+      <div class="file-input-wrapper">
+        <button class="btn btn-import">設定ファイル選択</button>
+        <input type="file" id="import-file" accept=".json">
+      </div>
+      <span id="filename-display" class="filename-display">ファイルが選択されていません</span>
+    </div>
+    
+    <div class="buttons">
+      <button id="import-btn" class="btn btn-import">インポート</button>
+      <button id="export-btn" class="btn btn-export">エクスポート</button>
+    </div>
+  </div>
+
   <script src="popup.js"></script>
 </body>
 </html>

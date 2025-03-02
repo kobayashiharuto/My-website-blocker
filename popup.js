@@ -13,6 +13,9 @@ let settings = {
   ]
 };
 
+// 選択されたインポートファイル
+let selectedImportFile = null;
+
 // ページ読み込み時の処理
 document.addEventListener('DOMContentLoaded', function () {
   initializePopup();
@@ -27,57 +30,350 @@ function initializePopup() {
     }
 
     // UI更新
-    const enableBlocker = document.getElementById('enable-blocker');
-    if (enableBlocker) {
-      enableBlocker.checked = settings.enabled;
+    updateUI();
 
-      // 有効/無効チェックボックスのイベントリスナー
-      enableBlocker.addEventListener('change', function (e) {
-        settings.enabled = e.target.checked;
-      });
-    }
-
-    // セット追加ボタンのイベントリスナー
-    const addSetBtn = document.getElementById('add-set');
-    if (addSetBtn) {
-      addSetBtn.addEventListener('click', function () {
-        settings.sets = settings.sets || [];
-        settings.sets.push({
-          name: "新しいセット",
-          isWhitelist: true,
-          sites: ["example.com"],
-          timeRanges: [
-            { start: "09:00", end: "17:00" }
-          ]
-        });
-        renderSets();
-      });
-    }
-
-    // 保存ボタンのイベントリスナー
-    const saveBtn = document.getElementById('save');
-    if (saveBtn) {
-      saveBtn.addEventListener('click', function () {
-        updateSettingsFromUI();
-
-        // 設定を保存
-        chrome.storage.local.set({ settings: settings }, function () {
-          // 保存完了メッセージ
-          const status = document.createElement('div');
-          status.textContent = '設定を保存しました。';
-          status.style.color = 'green';
-          status.style.marginTop = '10px';
-          document.body.appendChild(status);
-          setTimeout(function () {
-            status.remove();
-          }, 1500);
-        });
-      });
-    }
-
-    // セットを表示
-    renderSets();
+    // イベントリスナーのセットアップ
+    setupEventListeners();
   });
+}
+
+// UIを更新
+function updateUI() {
+  const enableBlocker = document.getElementById('enable-blocker');
+  if (enableBlocker) {
+    enableBlocker.checked = settings.enabled;
+  }
+
+  // セットを表示
+  renderSets();
+}
+
+// イベントリスナーのセットアップ
+function setupEventListeners() {
+  // 有効/無効チェックボックスのイベントリスナー
+  const enableBlocker = document.getElementById('enable-blocker');
+  if (enableBlocker) {
+    enableBlocker.addEventListener('change', function (e) {
+      if (e.target.checked) {
+        // 有効化は簡単に
+        settings.enabled = true;
+        updateUI();
+        chrome.storage.local.set({ settings: settings });
+        showMessage("ブロッカーを有効化しました", "success");
+      } else {
+        // 無効化は複雑なチャレンジを経て
+        e.target.checked = true; // 一旦元に戻す
+        disableBlockerWithChallenge();
+      }
+    });
+  }
+
+  // セット追加ボタンのイベントリスナー
+  const addSetBtn = document.getElementById('add-set');
+  if (addSetBtn) {
+    addSetBtn.addEventListener('click', function () {
+      settings.sets = settings.sets || [];
+      settings.sets.push({
+        name: "新しいセット",
+        isWhitelist: true,
+        sites: ["example.com"],
+        timeRanges: [
+          { start: "09:00", end: "17:00" }
+        ]
+      });
+      renderSets();
+    });
+  }
+
+  // 保存ボタンのイベントリスナー
+  const saveBtn = document.getElementById('save');
+  if (saveBtn) {
+    saveBtn.addEventListener('click', function () {
+      updateSettingsFromUI();
+
+      // 設定を保存
+      chrome.storage.local.set({ settings: settings }, function () {
+        showMessage("設定を保存しました", "success");
+      });
+    });
+  }
+
+  // ファイル選択イベントリスナー
+  const importFile = document.getElementById('import-file');
+  if (importFile) {
+    importFile.addEventListener('change', function (e) {
+      const fileDisplay = document.getElementById('filename-display');
+      if (e.target.files.length > 0) {
+        selectedImportFile = e.target.files[0];
+        if (fileDisplay) {
+          fileDisplay.textContent = selectedImportFile.name;
+        }
+      } else {
+        selectedImportFile = null;
+        if (fileDisplay) {
+          fileDisplay.textContent = "ファイルが選択されていません";
+        }
+      }
+    });
+  }
+
+  // インポートボタンのイベントリスナー
+  const importBtn = document.getElementById('import-btn');
+  if (importBtn) {
+    importBtn.addEventListener('click', function () {
+      if (!selectedImportFile) {
+        showMessage("ファイルが選択されていません", "error");
+        return;
+      }
+
+      const reader = new FileReader();
+      reader.onload = function (e) {
+        try {
+          const importedSettings = JSON.parse(e.target.result);
+
+          // 設定の検証
+          if (!validateSettings(importedSettings)) {
+            showMessage("不正な設定ファイルです", "error");
+            return;
+          }
+
+          // 設定を適用
+          settings = importedSettings;
+          chrome.storage.local.set({ settings: settings }, function () {
+            updateUI();
+            showMessage("設定をインポートしました", "success");
+          });
+        } catch (err) {
+          console.error("インポートエラー:", err);
+          showMessage("インポートに失敗しました: " + err.message, "error");
+        }
+      };
+
+      reader.onerror = function () {
+        showMessage("ファイルの読み込みに失敗しました", "error");
+      };
+
+      reader.readAsText(selectedImportFile);
+    });
+  }
+
+  // エクスポートボタンのイベントリスナー
+  const exportBtn = document.getElementById('export-btn');
+  if (exportBtn) {
+    exportBtn.addEventListener('click', function () {
+      updateSettingsFromUI(); // 現在のUI状態を設定に反映
+
+      // JSON文字列の作成
+      const settingsJson = JSON.stringify(settings, null, 2);
+
+      // ファイルとしてダウンロード
+      const blob = new Blob([settingsJson], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = 'web-blocker-settings.json';
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+
+      showMessage("設定をエクスポートしました", "success");
+    });
+  }
+}
+
+// 設定の検証
+function validateSettings(settings) {
+  // 基本構造のチェック
+  if (!settings || typeof settings !== 'object') {
+    return false;
+  }
+
+  // enabledプロパティが存在するか
+  if (typeof settings.enabled !== 'boolean') {
+    return false;
+  }
+
+  // setsプロパティが配列であるか
+  if (!Array.isArray(settings.sets)) {
+    return false;
+  }
+
+  // 各セットの検証
+  for (const set of settings.sets) {
+    // 必須プロパティの存在チェック
+    if (!set.name || typeof set.isWhitelist !== 'boolean' ||
+      !Array.isArray(set.sites) || !Array.isArray(set.timeRanges)) {
+      return false;
+    }
+
+    // 時間範囲の検証
+    for (const range of set.timeRanges) {
+      if (!range.start || !range.end) {
+        return false;
+      }
+    }
+  }
+
+  return true;
+}
+
+// 複雑なチャレンジを通じてブロッカーを無効化する関数
+function disableBlockerWithChallenge() {
+  const challenges = [
+    {
+      type: "math",
+      generate: () => {
+        const num1 = Math.floor(Math.random() * 20) + 10;
+        const num2 = Math.floor(Math.random() * 20) + 10;
+        const operation = ['+', '-', '*'][Math.floor(Math.random() * 3)];
+        let answer;
+
+        switch (operation) {
+          case '+': answer = num1 + num2; break;
+          case '-': answer = num1 - num2; break;
+          case '*': answer = num1 * num2; break;
+        }
+
+        return {
+          question: `${num1} ${operation} ${num2} = ?`,
+          answer: answer.toString()
+        };
+      }
+    },
+    {
+      type: "typing",
+      generate: () => {
+        const phrases = [
+          "私は時間を大切にします",
+          "集中力を維持して目標を達成します",
+          "今この作業が最も重要であることを自覚しています",
+          "短期的な満足より長期的な成功を選びます"
+        ];
+        const phrase = phrases[Math.floor(Math.random() * phrases.length)];
+        return {
+          question: `次の文章を正確に入力してください: "${phrase}"`,
+          answer: phrase
+        };
+      }
+    },
+    {
+      type: "waiting",
+      generate: () => {
+        const seconds = Math.floor(Math.random() * 10) + 20; // 20-30秒のランダム待機
+        return {
+          question: `解除するには${seconds}秒間待ってください`,
+          seconds: seconds
+        };
+      }
+    }
+  ];
+
+  // チャレンジを開始する
+  startChallengeSequence(challenges, 0);
+}
+
+// チャレンジシーケンスを実行
+function startChallengeSequence(challenges, index) {
+  if (index >= challenges.length) {
+    // すべてのチャレンジをクリアしたら解除
+    settings.enabled = false;
+    updateUI();
+    chrome.storage.local.set({ settings: settings });
+    showMessage("ブロッカーを解除しました", "success");
+    return;
+  }
+
+  const challenge = challenges[index];
+  const generated = challenge.generate();
+
+  // チャレンジUIを表示
+  const challengeDiv = document.createElement('div');
+  challengeDiv.className = 'challenge-container';
+
+  if (challenge.type === "waiting") {
+    // 待機チャレンジ
+    challengeDiv.innerHTML = `
+      <h3>チャレンジ ${index + 1}/${challenges.length}</h3>
+      <p>${generated.question}</p>
+      <div class="progress-container">
+        <div class="progress-bar" id="waiting-progress"></div>
+      </div>
+      <p id="waiting-time">${generated.seconds}</p>
+      <button id="cancel-challenge" class="btn btn-secondary">キャンセル</button>
+    `;
+
+    document.body.appendChild(challengeDiv);
+
+    // キャンセルボタンのイベントリスナー
+    document.getElementById('cancel-challenge').addEventListener('click', function () {
+      challengeDiv.remove();
+    });
+
+    // プログレスバーとカウントダウン
+    const progressBar = document.getElementById('waiting-progress');
+    const timeDisplay = document.getElementById('waiting-time');
+    let timeLeft = generated.seconds;
+    const totalTime = generated.seconds;
+
+    const timer = setInterval(() => {
+      timeLeft -= 1;
+      progressBar.style.width = `${(totalTime - timeLeft) / totalTime * 100}%`;
+      timeDisplay.textContent = timeLeft;
+
+      if (timeLeft <= 0) {
+        clearInterval(timer);
+        challengeDiv.remove();
+        startChallengeSequence(challenges, index + 1);
+      }
+    }, 1000);
+  } else {
+    // 入力チャレンジ
+    challengeDiv.innerHTML = `
+      <h3>チャレンジ ${index + 1}/${challenges.length}</h3>
+      <p>${generated.question}</p>
+      <input type="text" id="challenge-answer" class="challenge-input" placeholder="答えを入力">
+      <div class="button-group">
+        <button id="submit-challenge" class="btn btn-primary">回答</button>
+        <button id="cancel-challenge" class="btn btn-secondary">キャンセル</button>
+      </div>
+      <p id="challenge-feedback" class="feedback"></p>
+    `;
+
+    document.body.appendChild(challengeDiv);
+
+    // 回答チェック
+    document.getElementById('submit-challenge').addEventListener('click', function () {
+      const answer = document.getElementById('challenge-answer').value;
+      const feedback = document.getElementById('challenge-feedback');
+
+      if (answer === generated.answer) {
+        feedback.textContent = "正解です！";
+        feedback.style.color = "green";
+
+        setTimeout(() => {
+          challengeDiv.remove();
+          startChallengeSequence(challenges, index + 1);
+        }, 1000);
+      } else {
+        feedback.textContent = "不正解です。もう一度試してください。";
+        feedback.style.color = "red";
+      }
+    });
+
+    // キャンセルボタン
+    document.getElementById('cancel-challenge').addEventListener('click', function () {
+      challengeDiv.remove();
+    });
+
+    // Enterキーでの送信
+    document.getElementById('challenge-answer').addEventListener('keypress', function (e) {
+      if (e.key === 'Enter') {
+        document.getElementById('submit-challenge').click();
+      }
+    });
+  }
 }
 
 // UIから現在の設定を取得
@@ -321,3 +617,12 @@ function createTimeRangeElement(start, end) {
   return timeRangeElement;
 }
 
+// メッセージ表示関数
+function showMessage(text, type) {
+  const message = document.createElement('div');
+  message.className = `message ${type}`;
+  message.textContent = text;
+  document.body.appendChild(message);
+
+  setTimeout(() => message.remove(), 3000);
+}
