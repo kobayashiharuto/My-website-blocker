@@ -1,0 +1,180 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>時間制限ウェブサイトブロッカー</title>
+  <meta charset="UTF-8">
+  <style>
+    body {
+      width: 400px;
+      padding: 15px;
+      font-family: sans-serif;
+    }
+    .set-container {
+      margin-bottom: 20px;
+      padding: 15px;
+      border: 1px solid #ccc;
+      border-radius: 8px;
+      background-color: #f9f9f9;
+    }
+    .set-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 10px;
+    }
+    .set-name {
+      font-weight: bold;
+      font-size: 16px;
+      margin-right: 10px;
+    }
+    .set-name-input {
+      font-weight: bold;
+      width: 150px;
+      padding: 5px;
+    }
+    .list-type {
+      display: flex;
+      align-items: center;
+      margin-bottom: 10px;
+    }
+    .list-type label {
+      margin-right: 15px;
+    }
+    .switch {
+      position: relative;
+      display: inline-block;
+      width: 50px;
+      height: 24px;
+    }
+    .switch input {
+      opacity: 0;
+      width: 0;
+      height: 0;
+    }
+    .slider {
+      position: absolute;
+      cursor: pointer;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background-color: #ccc;
+      transition: .4s;
+      border-radius: 24px;
+    }
+    .slider:before {
+      position: absolute;
+      content: "";
+      height: 16px;
+      width: 16px;
+      left: 4px;
+      bottom: 4px;
+      background-color: white;
+      transition: .4s;
+      border-radius: 50%;
+    }
+    input:checked + .slider {
+      background-color: #2196F3;
+    }
+    input:checked + .slider:before {
+      transform: translateX(26px);
+    }
+    .sites-container {
+      margin-bottom: 15px;
+    }
+    .site {
+      display: flex;
+      margin-bottom: 5px;
+      align-items: center;
+    }
+    .site input {
+      flex-grow: 1;
+      margin-right: 5px;
+      padding: 5px;
+    }
+    .time-ranges-container {
+      margin-bottom: 15px;
+    }
+    .time-range {
+      display: flex;
+      align-items: center;
+      margin-bottom: 8px;
+      padding: 8px;
+      background-color: #f0f0f0;
+      border-radius: 5px;
+    }
+    .time-range input[type="time"] {
+      padding: 3px;
+      margin-right: 10px;
+    }
+    .controls {
+      display: flex;
+      justify-content: space-between;
+      margin-top: 15px;
+    }
+    button {
+      padding: 5px 10px;
+      cursor: pointer;
+      background-color: #f0f0f0;
+      border: 1px solid #ccc;
+      border-radius: 3px;
+    }
+    button:hover {
+      background-color: #e0e0e0;
+    }
+    .add-site {
+      margin-top: 5px;
+    }
+    h2 {
+      margin-top: 0;
+      color: #333;
+    }
+    h4 {
+      margin: 10px 0;
+      color: #555;
+    }
+    .section-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    #enabled {
+      margin-bottom: 15px;
+    }
+    .remove-btn {
+      background-color: #ff9999;
+      color: #770000;
+    }
+    .remove-btn:hover {
+      background-color: #ff7777;
+    }
+    .add-btn {
+      /* background-color: #ccffcc;
+      color: #006600; */
+    }
+    .add-btn:hover {
+      /* background-color: #aaffaa; */
+    }
+  </style>
+</head>
+<body>
+  <h2>時間制限ウェブサイトブロッカー</h2>
+  
+  <div id="enabled">
+    <label>
+      <input type="checkbox" id="enable-blocker"> ウェブサイトブロックを有効化
+    </label>
+  </div>
+  
+  <div id="sets-container">
+    <!-- セットが動的に追加されます -->
+  </div>
+  
+  <div class="controls">
+    <button id="add-set" class="add-btn">新しいセットを追加</button>
+    <button id="save">設定を保存</button>
+  </div>
+  
+  <script src="popup.js"></script>
+</body>
+</html>
