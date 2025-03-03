@@ -27,38 +27,38 @@ let settings = {
 // 休憩開始機能
 function startBreak(durationMinutes) {
   log(`休憩モードを開始: ${durationMinutes}分間`);
-  
+
   const endTime = new Date().getTime() + (durationMinutes * 60 * 1000);
-  
+
   breakInfo = {
     active: true,
     endTime: endTime
   };
-  
+
   // 休憩情報を保存
   chrome.storage.local.set({ breakInfo: breakInfo });
-  
+
   // 休憩終了のアラームを設定
   setBreakEndAlarm();
-  
+
   return breakInfo;
 }
 
 // 休憩終了アラームをセット
 function setBreakEndAlarm() {
   if (!breakInfo.active || !breakInfo.endTime) return;
-  
+
   // まず既存のアラームをクリア
   chrome.alarms.clear("breakEnd", () => {
     // 現在時刻と終了時刻の差分を計算（分単位）
     const remainingMinutes = (breakInfo.endTime - new Date().getTime()) / (60 * 1000);
-    
+
     if (remainingMinutes <= 0) {
       // 既に終了時間を過ぎている場合は休憩モードを終了
       endBreak();
       return;
     }
-    
+
     // 休憩終了アラームを設定
     chrome.alarms.create("breakEnd", { delayInMinutes: remainingMinutes });
     log(`休憩終了アラームを設定: 残り約${Math.round(remainingMinutes)}分`);
@@ -68,35 +68,35 @@ function setBreakEndAlarm() {
 // 休憩終了処理
 function endBreak() {
   log("休憩モードを終了します");
-  
+
   breakInfo = {
     active: false,
     endTime: null
   };
-  
+
   // 休憩情報を更新
   chrome.storage.local.set({ breakInfo: breakInfo });
-  
+
   // アラームを削除
   chrome.alarms.clear("breakEnd");
-  
+
   // すべてのタブを再チェック
   checkAllTabs();
 }
 
 // すべてのタブをチェックする関数
 function checkAllTabs() {
-  chrome.tabs.query({}, function(tabs) {
+  chrome.tabs.query({}, function (tabs) {
     for (const tab of tabs) {
       // chrome://などの特殊なURLは無視
-      if (!tab.url || 
-          tab.url.startsWith("chrome://") ||
-          tab.url.startsWith("chrome-extension://") ||
-          tab.url.startsWith("about:") ||
-          tab.url.startsWith(chrome.runtime.getURL(''))) {
+      if (!tab.url ||
+        tab.url.startsWith("chrome://") ||
+        tab.url.startsWith("chrome-extension://") ||
+        tab.url.startsWith("about:") ||
+        tab.url.startsWith(chrome.runtime.getURL(''))) {
         continue;
       }
-      
+
       // ブロックすべきURLかチェック
       if (shouldBlockUrl(tab.url)) {
         log(`休憩終了時にブロック: ${tab.url}`);
@@ -126,7 +126,7 @@ function initialize() {
     // 休憩情報があれば読み込む
     if (result.breakInfo) {
       breakInfo = result.breakInfo;
-      
+
       // 休憩中だが、既に終了時間を過ぎている場合はリセット
       if (breakInfo.active && breakInfo.endTime && new Date().getTime() > breakInfo.endTime) {
         breakInfo = { active: false, endTime: null };
@@ -233,13 +233,13 @@ function checkActiveTab() {
 }
 
 // メッセージハンドラ
-chrome.runtime.onMessage.addListener(function(request, sender, sendResponse) {
+chrome.runtime.onMessage.addListener(function (request, sender, sendResponse) {
   if (request.action === 'startBreak') {
     const duration = request.duration || 30; // デフォルトは30分
     const breakInfoResult = startBreak(duration);
     sendResponse({ success: true, breakInfo: breakInfoResult });
     return true;
-  } 
+  }
   else if (request.action === 'endBreak') {
     endBreak();
     sendResponse({ success: true });

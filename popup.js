@@ -34,7 +34,7 @@ function initializePopup() {
     if (result.settings) {
       settings = result.settings;
     }
-    
+
     if (result.breakInfo) {
       breakInfo = result.breakInfo;
     }
@@ -44,7 +44,7 @@ function initializePopup() {
 
     // イベントリスナーのセットアップ
     setupEventListeners();
-    
+
     // 休憩モードのUIを更新
     updateBreakModeUI();
   });
@@ -55,17 +55,17 @@ function updateBreakModeUI() {
   const breakModeSection = document.getElementById('break-mode-section');
   const takeBreakBtn = document.getElementById('take-break-btn');
   const breakTimer = document.getElementById('break-timer');
-  
+
   if (!breakModeSection || !takeBreakBtn || !breakTimer) {
     return;
   }
-  
+
   if (breakInfo.active && breakInfo.endTime) {
     // 休憩モードがアクティブな場合
     const endTime = new Date(breakInfo.endTime);
     const now = new Date();
     const remainingMs = endTime - now;
-    
+
     if (remainingMs <= 0) {
       // 休憩時間が終了している場合
       breakTimer.textContent = '';
@@ -75,11 +75,11 @@ function updateBreakModeUI() {
       // 休憩中の場合
       const remainingMinutes = Math.floor(remainingMs / (60 * 1000));
       const remainingSeconds = Math.floor((remainingMs % (60 * 1000)) / 1000);
-      
+
       breakTimer.textContent = `残り時間: ${remainingMinutes}分 ${remainingSeconds}秒`;
       takeBreakBtn.textContent = '休憩を終了する';
       takeBreakBtn.disabled = false;
-      
+
       // タイマーを1秒ごとに更新
       setTimeout(updateBreakModeUI, 1000);
     }
@@ -238,10 +238,10 @@ function setupEventListeners() {
 
   const takeBreakBtn = document.getElementById('take-break-btn');
   if (takeBreakBtn) {
-    takeBreakBtn.addEventListener('click', function() {
+    takeBreakBtn.addEventListener('click', function () {
       if (breakInfo.active) {
         // 休憩中なら終了する
-        chrome.runtime.sendMessage({ action: 'endBreak' }, function(response) {
+        chrome.runtime.sendMessage({ action: 'endBreak' }, function (response) {
           if (response && response.success) {
             breakInfo = { active: false, endTime: null };
             updateBreakModeUI();
@@ -250,7 +250,7 @@ function setupEventListeners() {
         });
       } else {
         // 休憩を開始する
-        chrome.runtime.sendMessage({ action: 'startBreak', duration: 30 }, function(response) {
+        chrome.runtime.sendMessage({ action: 'startBreak', duration: 30 }, function (response) {
           if (response && response.success) {
             breakInfo = response.breakInfo;
             updateBreakModeUI();
