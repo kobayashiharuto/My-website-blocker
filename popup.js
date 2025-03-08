@@ -22,15 +22,41 @@ let breakInfo = {
 // 選択されたインポートファイル
 let selectedImportFile = null;
 
+// Chrome API用のPromiseラッパー
+const chromeAPI = {
+  // ストレージ操作をPromise化
+  storage: {
+    local: {
+      get: (keys) => new Promise((resolve) => {
+        chrome.storage.local.get(keys, (result) => resolve(result));
+      }),
+      set: (items) => new Promise((resolve) => {
+        chrome.storage.local.set(items, () => resolve());
+      })
+    }
+  },
+  // メッセージ送信をPromise化
+  runtime: {
+    sendMessage: (message) => new Promise((resolve) => {
+      chrome.runtime.sendMessage(message, (response) => resolve(response));
+    })
+  }
+};
+
+// 遅延関数
+const delay = (ms) => new Promise(resolve => setTimeout(resolve, ms));
+
 // ページ読み込み時の処理
 document.addEventListener('DOMContentLoaded', function () {
   initializePopup();
 });
 
 // ポップアップの初期化
-function initializePopup() {
-  // 設定を読み込み
-  chrome.storage.local.get(['settings', 'breakInfo'], function (result) {
+async function initializePopup() {
+  try {
+    // 設定と休憩情報を読み込み
+    const result = await chromeAPI.storage.local.get(['settings', 'breakInfo']);
+
     if (result.settings) {
       settings = result.settings;
     }
@@ -47,47 +73,8 @@ function initializePopup() {
 
     // 休憩モードのUIを更新
     updateBreakModeUI();
-  });
-}
-
-// 休憩モードのUIを更新
-function updateBreakModeUI() {
-  const breakModeSection = document.getElementById('break-mode-section');
-  const takeBreakBtn = document.getElementById('take-break-btn');
-  const breakTimer = document.getElementById('break-timer');
-
-  if (!breakModeSection || !takeBreakBtn || !breakTimer) {
-    return;
-  }
-
-  if (breakInfo.active && breakInfo.endTime) {
-    // 休憩モードがアクティブな場合
-    const endTime = new Date(breakInfo.endTime);
-    const now = new Date();
-    const remainingMs = endTime - now;
-
-    if (remainingMs <= 0) {
-      // 休憩時間が終了している場合
-      breakTimer.textContent = '';
-      takeBreakBtn.textContent = '30分間の休憩を取る';
-      takeBreakBtn.disabled = false;
-    } else {
-      // 休憩中の場合
-      const remainingMinutes = Math.floor(remainingMs / (60 * 1000));
-      const remainingSeconds = Math.floor((remainingMs % (60 * 1000)) / 1000);
-
-      breakTimer.textContent = `残り時間: ${remainingMinutes}分 ${remainingSeconds}秒`;
-      takeBreakBtn.textContent = '休憩を終了する';
-      takeBreakBtn.disabled = false;
-
-      // タイマーを1秒ごとに更新
-      setTimeout(updateBreakModeUI, 1000);
-    }
-  } else {
-    // 休憩モードが無効な場合
-    breakTimer.textContent = '';
-    takeBreakBtn.textContent = '30分間の休憩を取る';
-    takeBreakBtn.disabled = false;
+  } catch (error) {
+    console.error('初期化エラー:', error);
   }
 }
 
@@ -100,6 +87,61 @@ function updateUI() {
 
   // セットを表示
   renderSets();
+}
+
+// 休憩モードのUIを更新
+async function updateBreakModeUI() {
+  const breakModeSection = document.getElementById('break-mode-section');
+  const takeBreakBtn = document.getElementById('take-break-btn');
+  const breakStatus = document.getElementById('break-status');
+  const breakTimer = document.getElementById('break-timer');
+
+  if (!breakModeSection || !takeBreakBtn || !breakStatus || !breakTimer) {
+    return;
+  }
+
+  // 最新の休憩情報を取得
+  try {
+    const response = await chromeAPI.runtime.sendMessage({ action: 'getBreakInfo' });
+    if (response && response.success) {
+      breakInfo = response.breakInfo;
+    }
+  } catch (error) {
+    console.error('休憩情報取得エラー:', error);
+  }
+
+  if (breakInfo.active && breakInfo.endTime) {
+    // 休憩モードがアクティブな場合
+    const endTime = new Date(breakInfo.endTime);
+    const now = new Date();
+    const remainingMs = endTime - now;
+
+    if (remainingMs <= 0) {
+      // 休憩時間が終了している場合
+      breakStatus.textContent = '休憩モード: 無効';
+      breakTimer.textContent = '';
+      takeBreakBtn.textContent = '30分間の休憩を取る';
+      takeBreakBtn.disabled = false;
+    } else {
+      // 休憩中の場合
+      const remainingMinutes = Math.floor(remainingMs / (60 * 1000));
+      const remainingSeconds = Math.floor((remainingMs % (60 * 1000)) / 1000);
+
+      breakStatus.textContent = '休憩モード: 有効';
+      breakTimer.textContent = `残り時間: ${remainingMinutes}分 ${remainingSeconds}秒`;
+      takeBreakBtn.textContent = '休憩を終了する';
+      takeBreakBtn.disabled = false;
+
+      // タイマーを1秒ごとに更新
+      setTimeout(updateBreakModeUI, 1000);
+    }
+  } else {
+    // 休憩モードが無効な場合
+    breakStatus.textContent = '休憩モード: 無効';
+    breakTimer.textContent = '';
+    takeBreakBtn.textContent = '30分間の休憩を取る';
+    takeBreakBtn.disabled = false;
+  }
 }
 
 // イベントリスナーのセットアップ
@@ -142,13 +184,41 @@ function setupEventListeners() {
   // 保存ボタンのイベントリスナー
   const saveBtn = document.getElementById('save');
   if (saveBtn) {
-    saveBtn.addEventListener('click', function () {
+    saveBtn.addEventListener('click', async function () {
       updateSettingsFromUI();
 
-      // 設定を保存
-      chrome.storage.local.set({ settings: settings }, function () {
+      try {
+        // 設定を保存
+        await chromeAPI.storage.local.set({ settings: settings });
         showMessage("設定を保存しました", "success");
-      });
+      } catch (error) {
+        console.error('設定保存エラー:', error);
+        showMessage("設定の保存に失敗しました", "error");
+      }
+    });
+  }
+
+  // 休憩ボタンのイベントリスナー
+  const takeBreakBtn = document.getElementById('take-break-btn');
+  if (takeBreakBtn) {
+    takeBreakBtn.addEventListener('click', async function () {
+      if (breakInfo.active) {
+        // 休憩中なら終了する
+        try {
+          const response = await chromeAPI.runtime.sendMessage({ action: 'endBreak' });
+          if (response && response.success) {
+            breakInfo = { active: false, endTime: null };
+            updateBreakModeUI();
+            showMessage("休憩を終了しました", "success");
+          }
+        } catch (error) {
+          console.error('休憩終了エラー:', error);
+          showMessage("休憩終了に失敗しました", "error");
+        }
+      } else {
+        // 休憩を開始する前にチャレンジを実行
+        await takeBreakWithChallenge();
+      }
     });
   }
 
@@ -174,40 +244,31 @@ function setupEventListeners() {
   // インポートボタンのイベントリスナー
   const importBtn = document.getElementById('import-btn');
   if (importBtn) {
-    importBtn.addEventListener('click', function () {
+    importBtn.addEventListener('click', async function () {
       if (!selectedImportFile) {
         showMessage("ファイルが選択されていません", "error");
         return;
       }
 
-      const reader = new FileReader();
-      reader.onload = function (e) {
-        try {
-          const importedSettings = JSON.parse(e.target.result);
+      try {
+        const fileContent = await readFileAsText(selectedImportFile);
+        const importedSettings = JSON.parse(fileContent);
 
-          // 設定の検証
-          if (!validateSettings(importedSettings)) {
-            showMessage("不正な設定ファイルです", "error");
-            return;
-          }
-
-          // 設定を適用
-          settings = importedSettings;
-          chrome.storage.local.set({ settings: settings }, function () {
-            updateUI();
-            showMessage("設定をインポートしました", "success");
-          });
-        } catch (err) {
-          console.error("インポートエラー:", err);
-          showMessage("インポートに失敗しました: " + err.message, "error");
+        // 設定の検証
+        if (!validateSettings(importedSettings)) {
+          showMessage("不正な設定ファイルです", "error");
+          return;
         }
-      };
 
-      reader.onerror = function () {
-        showMessage("ファイルの読み込みに失敗しました", "error");
-      };
-
-      reader.readAsText(selectedImportFile);
+        // 設定を適用
+        settings = importedSettings;
+        await chromeAPI.storage.local.set({ settings: settings });
+        updateUI();
+        showMessage("設定をインポートしました", "success");
+      } catch (err) {
+        console.error("インポートエラー:", err);
+        showMessage("インポートに失敗しました: " + err.message, "error");
+      }
     });
   }
 
@@ -235,31 +296,16 @@ function setupEventListeners() {
       showMessage("設定をエクスポートしました", "success");
     });
   }
+}
 
-  const takeBreakBtn = document.getElementById('take-break-btn');
-  if (takeBreakBtn) {
-    takeBreakBtn.addEventListener('click', function () {
-      if (breakInfo.active) {
-        // 休憩中なら終了する
-        chrome.runtime.sendMessage({ action: 'endBreak' }, function (response) {
-          if (response && response.success) {
-            breakInfo = { active: false, endTime: null };
-            updateBreakModeUI();
-            showMessage("休憩を終了しました", "success");
-          }
-        });
-      } else {
-        // 休憩を開始する
-        chrome.runtime.sendMessage({ action: 'startBreak', duration: 30 }, function (response) {
-          if (response && response.success) {
-            breakInfo = response.breakInfo;
-            updateBreakModeUI();
-            showMessage("30分間の休憩を開始しました", "success");
-          }
-        });
-      }
-    });
-  }
+// ファイルを読み込むPromise関数
+function readFileAsText(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = e => resolve(e.target.result);
+    reader.onerror = () => reject(new Error("ファイルの読み込みに失敗しました"));
+    reader.readAsText(file);
+  });
 }
 
 // 設定の検証
@@ -453,6 +499,172 @@ function startChallengeSequence(challenges, index) {
       }
     });
   }
+}
+
+// 休憩チャレンジを実行
+async function takeBreakWithChallenge() {
+  const challenges = [
+    {
+      type: "typing",
+      generate: () => {
+        const phrases = [
+          "この休憩後は集中して作業します",
+          "休憩は大切ですが時間を守ります",
+          "メリハリをつけて効率的に過ごします",
+          "休憩後の作業計画を立てておきます"
+        ];
+        const phrase1 = phrases[Math.floor(Math.random() * phrases.length)];
+        const phrase2 = phrases[Math.floor(Math.random() * phrases.length)];
+        const phrase = `${phrase1} ${phrase2}`;
+        return {
+          question: `次の文章を入力して休憩を開始: "${phrase}"`,
+          answer: phrase
+        };
+      }
+    },
+    {
+      type: "math",
+      generate: () => {
+        const num1 = Math.floor(Math.random() * 20) + 10;
+        const num2 = Math.floor(Math.random() * 20) + 10;
+        const operation = ['+', '-'][Math.floor(Math.random() * 3)];
+        let answer;
+
+        switch (operation) {
+          case '+': answer = num1 + num2; break;
+          case '-': answer = num1 - num2; break;
+        }
+
+        return {
+          question: `休憩を開始するには計算してください: ${num1} ${operation} ${num2} = ?`,
+          answer: answer.toString()
+        };
+      }
+    },
+    {
+      type: "typing",
+      generate: () => {
+        const phrases = [
+          "この休憩後は集中して作業します",
+          "休憩は大切ですが時間を守ります",
+          "メリハリをつけて効率的に過ごします",
+          "休憩後の作業計画を立てておきます"
+        ];
+        const phrase1 = phrases[Math.floor(Math.random() * phrases.length)];
+        const phrase2 = phrases[Math.floor(Math.random() * phrases.length)];
+        const phrase = `${phrase1} ${phrase2}`;
+        return {
+          question: `次の文章を入力して休憩を開始: "${phrase}"`,
+          answer: phrase
+        };
+      }
+    },
+    {
+      type: "math",
+      generate: () => {
+        const num1 = Math.floor(Math.random() * 20) + 10;
+        const num2 = Math.floor(Math.random() * 20) + 10;
+        const operation = ['+', '-'][Math.floor(Math.random() * 3)];
+        let answer;
+
+        switch (operation) {
+          case '+': answer = num1 + num2; break;
+          case '-': answer = num1 - num2; break;
+        }
+
+        return {
+          question: `休憩を開始するには計算してください: ${num1} ${operation} ${num2} = ?`,
+          answer: answer.toString()
+        };
+      }
+    },
+  ];
+
+  // ランダムにチャレンジを選択
+  for (let i = 0; i < 4; i++) {
+    const challenge = challenges[i];
+    const generated = challenge.generate();
+    // チャレンジをクリアするか、キャンセルするまで進まない
+    let result = await presentChallenge(generated.question, generated.answer);
+    if (!result) {
+      showMessage("休憩チャレンジをキャンセルしました", "error");
+      return;
+    }
+  }
+
+  // チャレンジ成功の場合、休憩を開始
+  try {
+    const response = await chromeAPI.runtime.sendMessage({ action: 'startBreak', duration: 30 });
+    if (response && response.success) {
+      breakInfo = response.breakInfo;
+      updateBreakModeUI();
+      showMessage("30分間の休憩を開始しました", "success");
+    }
+  } catch (error) {
+    console.error('休憩開始エラー:', error);
+    showMessage("休憩開始に失敗しました", "error");
+  }
+}
+
+// チャレンジを表示して、結果をPromiseとして返す
+function presentChallenge(question, answer) {
+  return new Promise((resolve) => {
+    // チャレンジUIを表示
+    const challengeDiv = document.createElement('div');
+    challengeDiv.className = 'challenge-container';
+    challengeDiv.innerHTML = `
+      <style>
+        .no-select {
+          user-select: none;
+          -webkit-user-select: none; /* Safari対応 */
+          -moz-user-select: none; /* Firefox対応 */
+          -ms-user-select: none; /* IE対応 */
+        }
+      </style>
+      <h3>休憩チャレンジ</h3>
+      <p class="no-select">${question}</p>
+      <input type="text" id="challenge-answer" class="challenge-input" placeholder="答えを入力">
+      <div class="button-group">
+        <button id="submit-challenge" class="btn btn-primary">回答</button>
+        <button id="cancel-challenge" class="btn btn-secondary">キャンセル</button>
+      </div>
+      <p id="challenge-feedback" class="feedback"></p>
+    `;
+
+    document.body.appendChild(challengeDiv);
+
+    // 回答チェック
+    document.getElementById('submit-challenge').addEventListener('click', function () {
+      const userAnswer = document.getElementById('challenge-answer').value;
+      const feedback = document.getElementById('challenge-feedback');
+
+      if (userAnswer === answer) {
+        feedback.textContent = "正解です！";
+        feedback.style.color = "green";
+
+        setTimeout(() => {
+          challengeDiv.remove();
+          resolve(true); // チャレンジ成功
+        }, 1000);
+      } else {
+        feedback.textContent = "不正解です。もう一度試してください。";
+        feedback.style.color = "red";
+      }
+    });
+
+    // キャンセルボタン
+    document.getElementById('cancel-challenge').addEventListener('click', function () {
+      challengeDiv.remove();
+      resolve(false); // チャレンジキャンセル
+    });
+
+    // Enterキーでの送信
+    document.getElementById('challenge-answer').addEventListener('keypress', function (e) {
+      if (e.key === 'Enter') {
+        document.getElementById('submit-challenge').click();
+      }
+    });
+  });
 }
 
 // UIから現在の設定を取得

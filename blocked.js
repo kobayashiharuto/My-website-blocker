@@ -26,6 +26,41 @@ function loadSavedUrl() {
   return localStorage.getItem('blockedUrl') || '';
 }
 
+// 休憩モード情報を取得する
+async function checkBreakMode() {
+  try {
+    const response = await new Promise((resolve) => {
+      chrome.runtime.sendMessage({ action: 'getBreakInfo' }, (response) => {
+        resolve(response);
+      });
+    });
+
+    if (response && response.success && response.breakInfo) {
+      return response.breakInfo;
+    }
+  } catch (error) {
+    console.error('休憩モード情報取得エラー:', error);
+  }
+
+  return { active: false, endTime: null };
+}
+
+// 休憩モードの場合は元のページに戻る
+async function redirectIfBreakMode() {
+  const breakInfo = await checkBreakMode();
+
+  if (breakInfo.active && breakInfo.endTime) {
+    const now = new Date().getTime();
+    if (now < breakInfo.endTime) {
+      // 休憩モード中なら元のURLにリダイレクト
+      const originalUrl = getOriginalUrl() || loadSavedUrl();
+      if (originalUrl) {
+        window.location.href = originalUrl;
+      }
+    }
+  }
+}
+
 // DOMがロードされたら初期化
 document.addEventListener('DOMContentLoaded', function () {
   // 時計を初期化
@@ -60,4 +95,10 @@ document.addEventListener('DOMContentLoaded', function () {
       }
     });
   }
+
+  // 休憩モード中なら元のページに戻る
+  redirectIfBreakMode();
+
+  // 休憩状態を定期的にチェック（10秒ごと）
+  setInterval(redirectIfBreakMode, 10000);
 });

@@ -274,18 +274,17 @@
     .btn-import:hover, .btn-export:hover {
       background-color: #388E3C;
     }
-
+    
     /* 休憩モードのスタイル */
     .break-mode {
       margin-top: 20px;
-      margin-bottom: 10px;
       padding: 15px;
       background-color: #e8f5e9;
       border-radius: 5px;
       border: 1px solid #c8e6c9;
     }
     .break-mode h3 {
-      margin-top: 0px;
+      margin-top: 0;
       color: #2e7d32;
     }
     #break-timer {
@@ -295,6 +294,7 @@
     }
     #take-break-btn {
       background-color: #4CAF50;
+      margin-top: 10px;
     }
     #take-break-btn:hover {
       background-color: #388E3C;
@@ -302,6 +302,12 @@
     #take-break-btn:disabled {
       background-color: #A5D6A7;
       cursor: not-allowed;
+    }
+    .break-note {
+      font-size: 12px;
+      color: #555;
+      margin-top: 8px;
+      font-style: italic;
     }
   </style>
 </head>
@@ -315,14 +321,16 @@
       <span class="slider"></span>
     </label>
   </div>
-
+  
   <!-- 休憩モードセクション -->
   <div id="break-mode-section" class="break-mode">
-    <h3>休憩モード</h3>
+    <h3>休憩モード 🕒</h3>
+    <p id="break-status">休憩モード: 無効</p>
     <p id="break-timer"></p>
     <button id="take-break-btn" class="btn">30分間の休憩を取る</button>
+    <p class="break-note">※休憩を開始するにはチャレンジをクリアする必要があります</p>
   </div>
-
+  
   <div id="sets-container">
     <!-- Set containers will be added here dynamically -->
   </div>

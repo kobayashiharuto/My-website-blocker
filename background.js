@@ -1,9 +1,3 @@
-// 休憩モード情報
-let breakInfo = {
-  active: false,
-  endTime: null
-};
-
 // デバッグ用ロギング関数
 function log(message) {
   console.log(`[WebBlocker] ${message}`);
@@ -23,6 +17,57 @@ let settings = {
     }
   ]
 };
+
+// 休憩モード情報
+let breakInfo = {
+  active: false,
+  endTime: null
+};
+
+// 初期化処理
+function initialize() {
+  log("拡張機能を初期化しています...");
+
+  // ストレージから設定と休憩情報をロード
+  chrome.storage.local.get(['settings', 'breakInfo'], function (result) {
+    if (result.settings) {
+      settings = result.settings;
+      log("設定をロードしました");
+    } else {
+      // 初期設定を保存
+      chrome.storage.local.set({ settings: settings });
+      log("デフォルト設定を保存しました");
+    }
+
+    // 休憩情報があれば読み込む
+    if (result.breakInfo) {
+      breakInfo = result.breakInfo;
+
+      // 休憩中だが、既に終了時間を過ぎている場合はリセット
+      if (breakInfo.active && breakInfo.endTime && new Date().getTime() > breakInfo.endTime) {
+        breakInfo = { active: false, endTime: null };
+        chrome.storage.local.set({ breakInfo: breakInfo });
+        log("期限切れの休憩モードをリセットしました");
+      } else if (breakInfo.active) {
+        log(`休憩モードを再開: ${new Date(breakInfo.endTime).toLocaleTimeString()}まで`);
+        // 休憩終了アラームを再設定
+        setBreakEndAlarm();
+      }
+    }
+
+    // アラームをセットアップ
+    setupBlockingSystem();
+  });
+}
+
+// 設定が変更されたら更新
+chrome.storage.onChanged.addListener(function (changes, namespace) {
+  if (namespace === 'local' && changes.settings) {
+    log("設定が更新されました");
+    settings = changes.settings.newValue;
+    setupBlockingSystem(); // 設定変更時にアラームを再設定
+  }
+});
 
 // 休憩開始機能
 function startBreak(durationMinutes) {
@@ -108,51 +153,6 @@ function checkAllTabs() {
   });
 }
 
-// 初期化処理
-function initialize() {
-  log("拡張機能を初期化しています...");
-
-  // ストレージから設定と休憩情報をロード
-  chrome.storage.local.get(['settings', 'breakInfo'], function (result) {
-    if (result.settings) {
-      settings = result.settings;
-      log("設定をロードしました");
-    } else {
-      // 初期設定を保存
-      chrome.storage.local.set({ settings: settings });
-      log("デフォルト設定を保存しました");
-    }
-
-    // 休憩情報があれば読み込む
-    if (result.breakInfo) {
-      breakInfo = result.breakInfo;
-
-      // 休憩中だが、既に終了時間を過ぎている場合はリセット
-      if (breakInfo.active && breakInfo.endTime && new Date().getTime() > breakInfo.endTime) {
-        breakInfo = { active: false, endTime: null };
-        chrome.storage.local.set({ breakInfo: breakInfo });
-        log("期限切れの休憩モードをリセットしました");
-      } else if (breakInfo.active) {
-        log(`休憩モードを再開: ${new Date(breakInfo.endTime).toLocaleTimeString()}まで`);
-        // 休憩終了アラームを再設定
-        setBreakEndAlarm();
-      }
-    }
-
-    // アラームをセットアップ
-    setupBlockingSystem();
-  });
-}
-
-// 設定が変更されたら更新
-chrome.storage.onChanged.addListener(function (changes, namespace) {
-  if (namespace === 'local' && changes.settings) {
-    log("設定が更新されました");
-    settings = changes.settings.newValue;
-    setupBlockingSystem(); // 設定変更時にアラームを再設定
-  }
-});
-
 // ブロッキングシステムのセットアップ
 function setupBlockingSystem() {
   // 既存のアラームをクリア
@@ -232,25 +232,6 @@ function checkActiveTab() {
   });
 }
 
-// メッセージハンドラ
-chrome.runtime.onMessage.addListener(function (request, sender, sendResponse) {
-  if (request.action === 'startBreak') {
-    const duration = request.duration || 30; // デフォルトは30分
-    const breakInfoResult = startBreak(duration);
-    sendResponse({ success: true, breakInfo: breakInfoResult });
-    return true;
-  }
-  else if (request.action === 'endBreak') {
-    endBreak();
-    sendResponse({ success: true });
-    return true;
-  }
-  else if (request.action === 'getBreakInfo') {
-    sendResponse({ success: true, breakInfo: breakInfo });
-    return true;
-  }
-});
-
 // タブがアクティブになったときのイベント
 chrome.tabs.onActivated.addListener(function (activeInfo) {
   log("タブがアクティブになりました: " + activeInfo.tabId);
@@ -264,6 +245,12 @@ chrome.webNavigation.onBeforeNavigate.addListener(function (details) {
 
   // 拡張機能が無効の場合はすべて許可
   if (!settings || !settings.enabled) return;
+
+  // 休憩モードがアクティブならチェックしない
+  if (breakInfo.active && breakInfo.endTime && new Date().getTime() < breakInfo.endTime) {
+    log(`休憩モード中: ${details.url} はブロックされません`);
+    return;
+  }
 
   // chrome://やchrome-extension://で始まるURLは無視
   if (details.url.startsWith("chrome://") ||
@@ -390,6 +377,30 @@ function shouldBlockUrl(url) {
     return false;
   }
 }
+
+// メッセージハンドラ
+chrome.runtime.onMessage.addListener(function (request, sender, sendResponse) {
+  if (request.action === 'startBreak') {
+    const duration = request.duration || 30; // デフォルトは30分
+    const breakInfoResult = startBreak(duration);
+    sendResponse({ success: true, breakInfo: breakInfoResult });
+    return true;
+  }
+  else if (request.action === 'endBreak') {
+    endBreak();
+    sendResponse({ success: true });
+    return true;
+  }
+  else if (request.action === 'getBreakInfo') {
+    // 最新の休憩情報を返す
+    // 休憩中に期限切れになっていないかも確認
+    if (breakInfo.active && breakInfo.endTime && new Date().getTime() > breakInfo.endTime) {
+      endBreak();
+    }
+    sendResponse({ success: true, breakInfo: breakInfo });
+    return true;
+  }
+});
 
 // 拡張機能起動時に初期化
 initialize();
