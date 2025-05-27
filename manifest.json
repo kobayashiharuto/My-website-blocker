@@ -5,39 +5,31 @@
   "description": "特定の時間帯に指定したウェブサイトのみアクセスを許可",
   "permissions": [
     "storage",
-    "tabs",
-    "webNavigation",
     "alarms",
-    "webRequest"
+    "tabs",
+    "scripting",
+    "notifications"
   ],
-  "host_permissions": [
-    "<all_urls>"
-  ],
+  "background": {
+    "service_worker": "js/background.js"
+  },
   "action": {
-    "default_popup": "popup.html",
+    "default_popup": "html/popup.html",
     "default_icon": {
-      "16": "icon16.png",
-      "48": "icon48.png",
-      "128": "icon128.png"
+      "16": "icons/icon16.png",
+      "48": "icons/icon48.png",
+      "128": "icons/icon128.png"
     }
   },
-  "background": {
-    "service_worker": "background.js"
-  },
   "icons": {
-    "16": "icon16.png",
-    "48": "icon48.png",
-    "128": "icon128.png"
+    "16": "icons/icon16.png",
+    "48": "icons/icon48.png",
+    "128": "icons/icon128.png"
   },
   "web_accessible_resources": [
     {
-      "resources": [
-        "blocked.html",
-        "blocked.js"
-      ],
-      "matches": [
-        "<all_urls>"
-      ]
+      "resources": ["html/blocked.html"],
+      "matches": ["<all_urls>"]
     }
   ]
 }

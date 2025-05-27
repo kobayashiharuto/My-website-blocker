@@ -1,0 +1,43 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <title>サイトブロッカー設定</title>
+  <link rel="stylesheet" href="../css/popup.css">
+</head>
+<body>
+  <h1>サイトブロッカー設定</h1>
+
+  <div class="global-controls">
+    <h2>全体設定</h2>
+    <div class="switch-container">
+      <label for="extensionEnabledSwitch" class="switch-label">拡張機能 有効/無効:</label>
+      <label class="switch">
+        <input type="checkbox" id="extensionEnabledSwitch">
+        <span class="slider round"></span>
+      </label>
+    </div>
+  </div>
+
+  <div class="break-controls">
+    <h2>休憩モード</h2>
+    <label for="breakDuration">休憩時間 (分):</label>
+    <input type="number" id="breakDuration" min="1" max="60" value="10">
+    <button id="startBreakButton">休憩を開始</button>
+    <div id="breakStatus" style="display:none; margin-top: 10px; padding: 10px; border-radius: 4px;">
+        <p style="margin:0 0 5px 0;"><strong>休憩中です！</strong></p>
+        <p style="margin:0 0 10px 0;">残り時間: <span id="breakTimeRemaining" style="font-weight:bold;"></span></p>
+        <button id="endBreakButton" class="remove-button" style="width:100%;">休憩を終了</button>
+    </div>
+  </div>
+
+  <h2>ルールセット</h2>
+  <div id="ruleSetsContainer"></div>
+  <button id="addRuleSetButton">新しいルールセットを追加</button>
+
+  <hr style="margin-top: 20px; margin-bottom: 15px;">
+  <button id="saveAllSettingsButton" style="width: 100%; padding: 10px; background-color: #28a745; font-size: 1.1em;">すべての設定を保存</button>
+
+  <script src="../js/popup.js"></script>
+</body>
+</html> 
