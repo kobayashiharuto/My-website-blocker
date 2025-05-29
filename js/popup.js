@@ -8,6 +8,18 @@ document.addEventListener('DOMContentLoaded', () => {
   const addRuleSetButton = document.getElementById('addRuleSetButton');
   const saveAllSettingsButton = document.getElementById('saveAllSettingsButton');
   const endBreakButton = document.getElementById('endBreakButton');
+  const extensionDisableConfirmArea = document.getElementById('extensionDisableConfirmArea');
+  const extensionDisableTimerDisplay = document.getElementById('extensionDisableTimer');
+  const cancelExtensionDisableButton = document.getElementById('cancelExtensionDisable');
+
+  const breakStartConfirmArea = document.getElementById('breakStartConfirmArea');
+  const breakStartTimerDisplay = document.getElementById('breakStartTimer');
+  const cancelBreakStartButton = document.getElementById('cancelBreakStart');
+
+  const CONFIRMATION_TIMEOUT_SECONDS = 30;
+  let activeConfirmationProcess = null; // null, 'disableExtension', 'startBreak'
+  let confirmationTimerId = null;
+  let countdownValue = 0;
 
   let currentSettings = {};
   let breakIntervalId = null;
@@ -18,7 +30,23 @@ document.addEventListener('DOMContentLoaded', () => {
       breakEndTime: 0,
   };
 
+  function resetConfirmationState() {
+    if (confirmationTimerId) clearInterval(confirmationTimerId);
+    confirmationTimerId = null;
+    activeConfirmationProcess = null;
+    countdownValue = 0;
+
+    extensionDisableConfirmArea.style.display = 'none';
+    breakStartConfirmArea.style.display = 'none';
+    
+    // Re-enable controls that might have been disabled
+    extensionEnabledSwitch.disabled = false;
+    startBreakButton.disabled = false;
+    breakDurationInput.disabled = false;
+  }
+
   function loadSettings() {
+    resetConfirmationState(); // Ensure clean state on popup open
     chrome.storage.local.get(defaultSettingsFromBackground, (settings) => {
       currentSettings = JSON.parse(JSON.stringify(settings));
       extensionEnabledSwitch.checked = currentSettings.isExtensionEnabled;
@@ -70,27 +98,92 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   extensionEnabledSwitch.addEventListener('change', () => {
-    const newState = extensionEnabledSwitch.checked;
-    currentSettings.isExtensionEnabled = newState;
-    chrome.storage.local.set({ isExtensionEnabled: newState }, () => {
-        console.log('Extension enabled state saved immediately:', newState);
-    });
+    if (activeConfirmationProcess) {
+      alert('別の確認処理が進行中です。');
+      extensionEnabledSwitch.checked = currentSettings.isExtensionEnabled; // Revert UI
+      return;
+    }
+    const isTryingToDisable = !extensionEnabledSwitch.checked;
+
+    if (isTryingToDisable) {
+      activeConfirmationProcess = 'disableExtension';
+      extensionEnabledSwitch.disabled = true; // Disable switch during countdown
+      extensionDisableConfirmArea.style.display = 'block';
+      countdownValue = CONFIRMATION_TIMEOUT_SECONDS;
+      extensionDisableTimerDisplay.textContent = countdownValue;
+
+      confirmationTimerId = setInterval(() => {
+        countdownValue--;
+        extensionDisableTimerDisplay.textContent = countdownValue;
+        if (countdownValue <= 0) {
+          clearInterval(confirmationTimerId);
+          currentSettings.isExtensionEnabled = false;
+          chrome.storage.local.set({ isExtensionEnabled: false }, () => {
+            console.log('Extension disabled after countdown.');
+          });
+          resetConfirmationState();
+          // Switch is already in the new state (false/unchecked)
+        }
+      }, 1000);
+    } else { // Enabling (no confirmation needed)
+      currentSettings.isExtensionEnabled = true;
+      chrome.storage.local.set({ isExtensionEnabled: true }, () => {
+        console.log('Extension enabled state saved immediately.');
+      });
+      // UI already reflects enabled state
+    }
+  });
+
+  cancelExtensionDisableButton.addEventListener('click', () => {
+    extensionEnabledSwitch.checked = true; // Revert to enabled
+    // currentSettings.isExtensionEnabled remains true or will be set true by the switch's change event if it fires again
+    resetConfirmationState();
+    alert('拡張機能の無効化がキャンセルされました。');
   });
 
   startBreakButton.addEventListener('click', () => {
-    const durationMinutes = parseInt(breakDurationInput.value, 10);
-    if (durationMinutes >= 1 && durationMinutes <= 60) {
-      const newBreakEndTime = Date.now() + durationMinutes * 60 * 1000;
-      currentSettings.isBreakActive = true;
-      currentSettings.breakEndTime = newBreakEndTime;
-      
-      chrome.storage.local.set({ isBreakActive: true, breakEndTime: newBreakEndTime }, () => {
-        console.log('Break state saved immediately.');
-        updateBreakStatus(currentSettings);
-      });
-    } else {
-      alert('休憩時間は1分から60分の間で設定してください。');
+    if (activeConfirmationProcess) {
+      alert('別の確認処理が進行中です。');
+      return;
     }
+    if (currentSettings.isBreakActive && currentSettings.breakEndTime > Date.now()) {
+        alert('既に休憩中です。');
+        return;
+    }
+
+    const durationMinutes = parseInt(breakDurationInput.value, 10);
+    if (!(durationMinutes >= 1 && durationMinutes <= 60)) {
+      alert('休憩時間は1分から60分の間で設定してください。');
+      return;
+    }
+
+    activeConfirmationProcess = 'startBreak';
+    startBreakButton.disabled = true;
+    breakDurationInput.disabled = true; // Disable input during countdown
+    breakStartConfirmArea.style.display = 'block';
+    countdownValue = CONFIRMATION_TIMEOUT_SECONDS;
+    breakStartTimerDisplay.textContent = countdownValue;
+
+    confirmationTimerId = setInterval(() => {
+      countdownValue--;
+      breakStartTimerDisplay.textContent = countdownValue;
+      if (countdownValue <= 0) {
+        clearInterval(confirmationTimerId);
+        const newBreakEndTime = Date.now() + durationMinutes * 60 * 1000;
+        currentSettings.isBreakActive = true;
+        currentSettings.breakEndTime = newBreakEndTime;
+        chrome.storage.local.set({ isBreakActive: true, breakEndTime: newBreakEndTime }, () => {
+          console.log('Break started after countdown.');
+          updateBreakStatus(currentSettings); // updateBreakStatus handles UI changes for active break
+        });
+        resetConfirmationState(); 
+      }
+    }, 1000);
+  });
+
+  cancelBreakStartButton.addEventListener('click', () => {
+    resetConfirmationState();
+    alert('休憩の開始がキャンセルされました。');
   });
 
   endBreakButton.addEventListener('click', () => {

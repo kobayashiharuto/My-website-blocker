@@ -17,6 +17,10 @@
         <span class="slider round"></span>
       </label>
     </div>
+    <div id="extensionDisableConfirmArea" style="display:none; margin-top:10px; padding:10px; background-color:#ffe0b2; border-radius:4px;">
+      <p>拡張機能が無効になるまで: <strong id="extensionDisableTimer">30</strong> 秒</p>
+      <button id="cancelExtensionDisable" class="remove-button">キャンセル</button>
+    </div>
   </div>
 
   <div class="break-controls">
@@ -24,6 +28,10 @@
     <label for="breakDuration">休憩時間 (分):</label>
     <input type="number" id="breakDuration" min="1" max="60" value="10">
     <button id="startBreakButton">休憩を開始</button>
+    <div id="breakStartConfirmArea" style="display:none; margin-top:10px; padding:10px; background-color:#ffe0b2; border-radius:4px;">
+        <p>休憩が開始されるまで: <strong id="breakStartTimer">30</strong> 秒</p>
+        <button id="cancelBreakStart" class="remove-button">キャンセル</button>
+    </div>
     <div id="breakStatus" style="display:none; margin-top: 10px; padding: 10px; border-radius: 4px;">
         <p style="margin:0 0 5px 0;"><strong>休憩中です！</strong></p>
         <p style="margin:0 0 10px 0;">残り時間: <span id="breakTimeRemaining" style="font-weight:bold;"></span></p>

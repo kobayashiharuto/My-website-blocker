@@ -216,16 +216,25 @@ input:checked + .slider:before {
   margin-left: 8px;
 }
 
-#breakStatus {
+#breakStatus, #extensionDisableConfirmArea, #breakStartConfirmArea {
   background-color: #FFE0B2;
   border: 1px solid #FFB74D;
   text-align: center;
+  margin-top: 10px;
+  padding: 10px;
+  border-radius: 4px;
 }
 
-#breakStatus p {
+#breakStatus p, #extensionDisableConfirmArea p, #breakStartConfirmArea p {
   color: #BF360C;
+  margin-bottom: 8px;
 }
 
-#breakStatus strong {
+#breakStatus strong, #extensionDisableConfirmArea strong, #breakStartConfirmArea strong {
   font-size: 1.1em;
+}
+
+#extensionDisableConfirmArea button, #breakStartConfirmArea button {
+  width: auto;
+  padding: 6px 12px;
 } 
