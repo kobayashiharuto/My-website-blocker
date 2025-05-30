@@ -143,6 +143,20 @@ chrome.alarms.onAlarm.addListener((alarm) => {
   });
 });
 
+// Helper function to match hostname with pattern (e.g., example.com, *.example.com)
+function matchHostname(hostname, pattern) {
+  if (!hostname || !pattern) return false;
+  try {
+    if (pattern.startsWith("*.")) {
+      const baseDomain = pattern.substring(2);
+      return hostname === baseDomain || hostname.endsWith("." + baseDomain);
+    }
+    return hostname === pattern;
+  } catch (e) {
+    console.error("Error matching hostname:", e);
+    return false;
+  }
+}
 
 // --- Tab Management ---
 async function checkAndBlockTabs(settings) {
@@ -171,73 +185,78 @@ async function checkAndBlockTabs(settings) {
     if (!tab.url || tab.url.startsWith('chrome://') || tab.url.startsWith(chrome.runtime.getURL("")) ) continue;
 
     let shouldBlock = false;
-    let activeRuleType = null;
+    let blockReason = null; // For logging/debugging: 'BLACKLIST', 'NOT_IN_WHITELIST'
+    const tabHostname = new URL(tab.url).hostname;
 
+    // 1. Check all active BLACKLISTS first
+    let matchedBlacklist = false;
     for (const ruleSet of settings.ruleSets) {
-      if (!ruleSet.enabled) continue;
-
+      if (!ruleSet.enabled || ruleSet.type !== 'BLACKLIST') continue;
       for (const timeSlot of ruleSet.times) {
         if (isTimeWithinSlot(currentTime, timeSlot.start, timeSlot.end)) {
-          // This rule set is active for the current time
-          const tabHostname = new URL(tab.url).hostname;
-          const isListed = ruleSet.urls.some(urlPattern => {
-            try {
-                // Support both full domain and subdomains like *.example.com
-                if (urlPattern.startsWith("*.")) {
-                    const baseDomain = urlPattern.substring(2);
-                    return tabHostname === baseDomain || tabHostname.endsWith("." + baseDomain);
-                }
-                return tabHostname === urlPattern;
-            } catch (e) { return false; }
-          });
-
-
-          if (ruleSet.type === 'WHITELIST') {
-            if (!isListed) {
-              shouldBlock = true;
-              activeRuleType = 'WHITELIST';
-              // console.log(`WHITELIST BLOCK: ${tab.url} not in [${ruleSet.urls.join(', ')}] during ${timeSlot.start}-${timeSlot.end}`);
-            } else {
-              // console.log(`WHITELIST ALLOW: ${tab.url} in [${ruleSet.urls.join(', ')}] during ${timeSlot.start}-${timeSlot.end}`);
-              shouldBlock = false; // Whitelisted, so explicitly don't block, even if a later blacklist rule might apply.
-              activeRuleType = null;
-              break; // Stop checking other rules in this set, and other sets. Whitelist match takes precedence.
-            }
-          } else if (ruleSet.type === 'BLACKLIST') {
-            if (isListed) {
-              shouldBlock = true;
-              activeRuleType = 'BLACKLIST';
-              // console.log(`BLACKLIST BLOCK: ${tab.url} in [${ruleSet.urls.join(', ')}] during ${timeSlot.start}-${timeSlot.end}`);
-              break; // Blacklist match, block immediately
-            } else {
-              // console.log(`BLACKLIST ALLOW: ${tab.url} not in [${ruleSet.urls.join(', ')}] during ${timeSlot.start}-${timeSlot.end}`);
-            }
+          if (ruleSet.urls.some(pattern => matchHostname(tabHostname, pattern))) {
+            shouldBlock = true;
+            blockReason = 'BLACKLIST';
+            matchedBlacklist = true;
+            console.log(`BLOCKING ${tab.url}: Matched BLACKLIST rule during ${timeSlot.start}-${timeSlot.end} (URLs: ${ruleSet.urls.join(', ')})`);
+            break; // Found a blacklist match in this ruleset, no need to check other timeslots in this set
           }
         }
       }
-      if (shouldBlock && activeRuleType === 'BLACKLIST') break; // A blacklist match means we must block.
-      if (!shouldBlock && activeRuleType === null && ruleSet.type === 'WHITELIST') break; // A whitelist allowed it.
+      if (matchedBlacklist) break; // Found a blacklist match in some ruleset, no need to check other blacklist rulesets
     }
 
+    // 2. If not blacklisted, check WHITELISTS (only if there are any active whitelists)
+    if (!matchedBlacklist) {
+      const activeWhitelistRuleSets = settings.ruleSets.filter(rs => rs.enabled && rs.type === 'WHITELIST');
+      let inAnyActiveWhitelist = false;
+      let isWhitelistPeriodActive = false; // Tracks if *any* whitelist time period is currently active
 
-    // If after checking all rules, it's a whitelist block, or a blacklist block, then block.
+      if (activeWhitelistRuleSets.length > 0) {
+        for (const ruleSet of activeWhitelistRuleSets) {
+          for (const timeSlot of ruleSet.times) {
+            if (isTimeWithinSlot(currentTime, timeSlot.start, timeSlot.end)) {
+              isWhitelistPeriodActive = true; // A whitelist rule is active for this time
+              if (ruleSet.urls.some(pattern => matchHostname(tabHostname, pattern))) {
+                inAnyActiveWhitelist = true; // Matched one of the whitelisted URLs
+                console.log(`ALLOWING ${tab.url}: Matched WHITELIST rule during ${timeSlot.start}-${timeSlot.end} (URLs: ${ruleSet.urls.join(', ')})`);
+                break; // Found in this whitelist, no need to check other timeslots in this set
+              }
+            }
+          }
+          if (inAnyActiveWhitelist) break; // Found in an active whitelist, no need to check other whitelist rulesets
+        }
+        
+        // If there was an active whitelist period, but the URL was not in ANY of the whitelists for that period
+        if (isWhitelistPeriodActive && !inAnyActiveWhitelist) {
+          shouldBlock = true;
+          blockReason = 'NOT_IN_WHITELIST';
+          console.log(`BLOCKING ${tab.url}: Not in any active WHITELIST during an active whitelist period.`);
+        }
+      } else {
+        // No active whitelist rulesets. Since it wasn't blacklisted, it's allowed by default.
+        // shouldBlock remains false.
+        console.log(`ALLOWING ${tab.url}: No active blacklist and no active whitelist rules.`);
+      }
+    } // End of whitelist check
+
+    // 3. Perform blocking or unblocking action
     if (shouldBlock) {
-        console.log(`Blocking ${tab.url} based on ${activeRuleType} rule.`);
+      console.log(`Final Decision: Blocking ${tab.url} (Reason: ${blockReason})`);
       const blockedPageUrl = chrome.runtime.getURL(`html/blocked.html?originalUrl=${encodeURIComponent(tab.url)}&timestamp=${Date.now()}`);
-      // Check if already on blocked page for this URL to prevent reload loops
       if (!tab.url.startsWith(chrome.runtime.getURL("html/blocked.html"))) {
         chrome.tabs.update(tab.id, { url: blockedPageUrl });
       }
     } else {
-        // If the tab is currently showing our blocked page, but it shouldn't be blocked anymore
-        if (tab.url.startsWith(chrome.runtime.getURL("html/blocked.html"))) {
-            const originalUrlParams = new URL(tab.url).searchParams;
-            const originalUrl = originalUrlParams.get('originalUrl');
-            if (originalUrl) {
-                console.log(`Unblocking ${originalUrl} as it's no longer matching rules.`);
-                chrome.tabs.update(tab.id, { url: decodeURIComponent(originalUrl) });
-            }
+      // If the tab is currently showing our blocked page, but it shouldn't be blocked anymore
+      if (tab.url.startsWith(chrome.runtime.getURL("html/blocked.html"))) {
+        const originalUrlParams = new URL(tab.url).searchParams;
+        const originalUrl = originalUrlParams.get('originalUrl');
+        if (originalUrl) {
+          console.log(`Final Decision: Unblocking ${decodeURIComponent(originalUrl)} as it no longer matches blocking rules.`);
+          chrome.tabs.update(tab.id, { url: decodeURIComponent(originalUrl) });
         }
+      }
     }
   }
 }
